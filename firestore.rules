@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 只有允許名單內、且 Email 已驗證的 Google 帳號可以讀寫
+    match /attendance/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          "your.name@gmail.com",
+          "colleague@yourcompany.com"
+        ];
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

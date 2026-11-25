@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>簽到表產生器</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f5f6f8;--card:#fff;--tx:#1d2330;--mut:#6a7385;--bd:#d5d9e2;--ac:#3a5a9b;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171a21;--card:#222733;--tx:#e8ebf2;--mut:#98a1b5;--bd:#3a4152;--ac:#7f9fe0;color-scheme:dark}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+.ui{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;cursor:pointer}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 8px}
+.mut{color:var(--mut);font-size:12px}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:5px 7px;max-width:100%}
+textarea{width:100%;min-height:80px}
+button.b{padding:6px 12px;border-radius:6px;border:1px solid var(--ac);background:var(--ac);color:#fff;cursor:pointer}
+button.g{padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.sc{overflow-x:auto}
+table.l{border-collapse:collapse;width:100%}
+table.l th,table.l td{border-bottom:1px solid var(--bd);padding:4px;text-align:left;white-space:nowrap}
+table.l input{width:100%;min-width:70px}
+.pane{display:none}.pane.on{display:block}
+/* sheets */
+.sheets{max-width:760px;margin:0 auto 40px;padding:0 8px}
+.sheet{background:#fff;color:#000;padding:10px;margin-bottom:16px;border:1px solid var(--bd);font-size:12px}
+.sheet h3{margin:0 0 6px;text-align:center;font-size:20px;border:1px solid #888;padding:3px}
+.sheet table{width:100%;border-collapse:collapse}
+.sheet .inf td{padding:2px 4px;border:0}
+.sheet .inf td.k{font-weight:700;width:12%}
+.sheet .d th{background:#3a5a9b;color:#fff;padding:3px;border:1px solid #888}
+.sheet .d td{border:1px solid #aaa;text-align:center;padding:1px 3px;height:19px}
+.sheet .d tr.off td{background:#d4d4d4}
+.sheet .sg{background:#dfe6f3;font-weight:700;padding:3px 4px;margin-top:8px;border:1px solid #bbb}
+.sheet .sn{padding:12px 4px;font-weight:700}
+@media print{
+ @page{size:A4;margin:8mm}
+ .ui{display:none!important}
+ body{background:#fff}
+ .sheets{max-width:none;margin:0;padding:0}
+ .sheet{border:0;margin:0;padding:0;page-break-after:always;break-after:page}
+ .sheet:last-child{page-break-after:auto;break-after:auto}
+}
+</style></head><body>
+<div class="ui">
+<h1>🗓️ 簽到表產生器</h1>
+<div class="row" id="cloudbar" style="display:none"><span id="cstat" class="mut"></span><button class="g" id="cin">Google 登入雲端同步</button><button class="g" id="cout" style="display:none">登出</button></div>
+<div class="tabs" id="tabs"></div>
+
+<div class="pane" id="p-people">
+ <div class="card"><h2>人員名單（勾選＝列印）</h2>
+  <div class="sc"><table class="l" id="ptab"></table></div>
+  <div class="row"><button class="b" id="addP">＋ 新增人員</button><button class="g" id="allOn">全選</button><button class="g" id="allOff">全不選</button></div>
+ </div>
+ <div class="card"><h2>批次匯入</h2>
+  <div class="mut">從 Excel 複製貼上，每行一人，欄位順序：員工編號、姓名、部門、職位（Tab 或逗號分隔）</div>
+  <textarea id="imp" placeholder="Y3101	羅濟偉	苗栗工廠	廠長&#10;Y4003	洪萬億	設計部	經理"></textarea>
+  <div class="row"><button class="b" id="doImp">匯入（同編號會覆蓋）</button></div>
+ </div>
+ <div class="card"><h2>資料備份</h2>
+  <div class="mut">資料存在這個瀏覽器裡。換電腦或清除瀏覽資料前，請先複製備份文字。</div>
+  <div class="row"><button class="g" id="exp">產生備份文字</button><button class="g" id="rest">從下方文字還原</button></div>
+  <textarea id="bak"></textarea>
+ </div>
+</div>
+
+<div class="pane" id="p-leave">
+ <div class="card"><h2>新增請假</h2>
+  <div class="row">人員 <select id="lp"></select>
+   假別 <select id="lt"><option>特休</option><option>病假</option><option>事假</option><option>公假</option><option>天災假</option><option>補休</option><option>婚假</option><option>喪假</option><option>其他</option></select></div>
+  <div class="row">日期 <input type="date" id="lf"> 至 <input type="date" id="lto"> <span class="mut">（單日可留空）</span></div>
+  <div class="row">時間 <input type="time" id="ls"> 至 <input type="time" id="le"> <span class="mut">（兩者留空＝整天請假）</span></div>
+  <div class="mut">規則：從上班前請到某時（如 08:30–10:30）→ 上班打卡約在 10:30 前 1–5 分鐘；請到下班（如 14:00–17:30）→ 下班打卡約在 14:00 後 1–5 分鐘；中間時段只在備註註明。多日請假一律視為整天。</div>
+  <div class="row"><button class="b" id="addL">加入</button></div>
+ </div>
+ <div class="card"><h2>請假紀錄</h2><div class="sc"><table class="l" id="ltab"></table></div></div>
+</div>
+
+<div class="pane" id="p-set">
+ <div class="card"><h2>打卡時間範圍</h2>
+  <div class="row">表單標題 <input id="c-title" size="10"></div>
+  <div class="row">上班 <input type="time" id="c-s1"> ～ <input type="time" id="c-s2">　下班 <input type="time" id="c-e1"> ～ <input type="time" id="c-e2"></div>
+  <div class="row"><button class="g" id="reroll">🎲 重新隨機（換一組時間）</button><span class="mut">同樣設定下，時間是固定的，重印不會變；按此鈕才會重抽。</span></div>
+ </div>
+ <div class="card"><h2>國定假日（平日）</h2>
+  <div class="mut">一行一個日期（YYYY-MM-DD）。預設為 2026 年平日放假日，請對照人事行政總處公告確認並自行增減。</div>
+  <textarea id="hol"></textarea></div>
+ <div class="card"><h2>補班日（週末要上班）</h2><textarea id="wk" placeholder="例如 2026-02-07"></textarea></div>
+</div>
+
+<div class="pane" id="p-print">
+ <div class="card"><h2>列印範圍</h2>
+  <div class="row">年月 <input type="month" id="m1"> 至 <input type="month" id="m2"></div>
+  <div class="row">日期（選填）第 <input type="number" id="d1" min="1" max="31" style="width:60px"> 日 至 第 <input type="number" id="d2" min="1" max="31" style="width:60px"> 日 <span class="mut">空白＝整個月</span></div>
+  <div class="row"><button class="b" id="prt">🖨️ 列印 / 存成 PDF</button><span class="mut" id="cnt"></span></div>
+  <div id="who" style="margin:8px 0;line-height:1.9"></div>
+  <div class="mut">每人每月一頁，順序為月份 → 人員。實際版面在本頁最下方預覽，每張表右上方都有姓名與員編。印表時在列印視窗取消「頁首頁尾」會更乾淨。</div>
+ </div>
+</div>
+</div>
+<div class="sheets" id="out"></div>
+
+<script>
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,'0');
+const DEF_HOL='2026-01-01\n2026-02-16\n2026-02-17\n2026-02-18\n2026-02-19\n2026-02-20\n2026-02-27\n2026-04-03\n2026-04-06\n2026-05-01\n2026-06-19\n2026-09-25\n2026-10-09\n2026-10-26\n2026-12-25';
+let S={people:[],leaves:[],hol:DEF_HOL,work:'',cfg:{s1:'08:20',s2:'08:30',e1:'17:30',e2:'17:35',salt:0,title:'簽到表'},pr:{}};
+try{const r=localStorage.getItem('att1');if(r){const o=JSON.parse(r);S=Object.assign(S,o);S.cfg=Object.assign({s1:'08:20',s2:'08:30',e1:'17:30',e2:'17:35',salt:0,title:'簽到表'},o.cfg||{})}}catch(e){}
+const save=()=>{try{localStorage.setItem('att1',JSON.stringify(S))}catch(e){}if(!window._np&&window.cloudPush)window.cloudPush(window.appGet())};
+window.appGet=()=>JSON.stringify(Object.assign({},S,{pr:{}}));
+window.appLoad=o=>{window._np=1;delete o.pr;S=Object.assign(S,o);S.cfg=Object.assign({s1:'08:20',s2:'08:30',e1:'17:30',e2:'17:35',salt:0,title:'簽到表'},S.cfg);init();window._np=0};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tm=t=>{const a=(t||'').split(':');return a.length<2?null:+a[0]*60+ +a[1]};
+const ft=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+function hs(s){let x=1779033703^s.length;for(let i=0;i<s.length;i++){x=Math.imul(x^s.charCodeAt(i),3432918353);x=x<<13|x>>>19}return x>>>0}
+function rng(seed){let a=seed;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const ri=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+const dset=t=>{const s=new Set();for(const m of (t||'').matchAll(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/g))s.add(`${m[1]}-${pad(m[2])}-${pad(m[3])}`);return s};
+const WD='日一二三四五六';
+
+function day(p,y,m,d){
+ const k=`${y}-${pad(m)}-${pad(d)}`,dow=new Date(y,m-1,d).getDay(),H=dset(S.hol),W=dset(S.work),c=S.cfg;
+ let cal='工作日',off=false;
+ if(!W.has(k)){if(dow===6){cal='休息日';off=true}else if(dow===0){cal='例假日';off=true}else if(H.has(k)){cal='國定假日';off=true}}
+ const o={k,dow,cal,off,up:'',dn:'',note:''};
+ if(off)return o;
+ const r=rng(hs(p.no+k+c.salt));
+ const s1=tm(c.s1),s2=tm(c.s2),e1=tm(c.e1),e2=tm(c.e2);
+ let up=ri(r,s1,s2),dn=ri(r,e1,e2);
+ const L=S.leaves.find(l=>l.pid===p.no&&k>=l.from&&k<=(l.to||l.from));
+ if(L){
+  const a=tm(L.st),b=tm(L.en),single=(L.to||L.from)===L.from;
+  if(a==null||b==null||!single){o.up=o.dn=L.type;return o}
+  if(a<=s2){up=Math.max(b-ri(r,1,5),a);o.note=`請${L.type}至${L.en}`}
+  else if(b>=e1){dn=Math.min(a+ri(r,1,5),b);o.note=`請${L.type} ${L.st}起`}
+  else o.note=`${L.type} ${L.st}-${L.en}`;
+ }
+ o.up=ft(up);o.dn=ft(dn);return o;
+}
+
+function sheet(p,y,m,d1,d2){
+ const n=new Date(y,m,0).getDate(),a=Math.max(1,d1||1),b=Math.min(n,d2||n);
+ let rows='';
+ for(let d=a;d<=b;d++){const o=day(p,y,m,d);
+  rows+=`<tr class="${o.off?'off':''}"><td>${y}/${m}/${d}</td><td>${WD[o.dow]}</td><td>${o.cal}</td><td>${o.up}</td><td>${o.dn}</td><td>${esc(o.note)}</td></tr>`}
+ return `<div class="sheet"><h3>${esc(S.cfg.title)}</h3>
+ <table class="inf"><tr><td class="k">員工編號：</td><td>${esc(p.no)}</td><td class="k">姓名：</td><td>${esc(p.name)}</td><td class="k">部門：</td><td>${esc(p.dept)}</td></tr>
+ <tr><td class="k">職位：</td><td>${esc(p.title)}</td><td class="k">適用年月：</td><td colspan="3">${y-1911}年${m}月份 (${y}年${m}月)</td></tr></table>
+ <table class="d" style="margin-top:6px"><tr><th>日期</th><th>星期</th><th>行事曆</th><th>上班</th><th>下班</th><th>備註</th></tr>${rows}</table>
+ <div class="sg">簽名確認</div><div class="sn">員工簽名：</div></div>`;
+}
+
+function months(){const a=S.pr.m1,b=S.pr.m2||a;if(!a)return[];const r=[];let[y,m]=a.split('-').map(Number);const[y2,m2]=b.split('-').map(Number);
+ while((y<y2||(y===y2&&m<=m2))&&r.length<36){r.push([y,m]);if(++m>12){m=1;y++}}return r}
+function renderOut(){
+ const ps=S.people.filter(p=>p.on),ms=months();let h='';
+ for(const[y,m]of ms)for(const p of ps)h+=sheet(p,y,m,+S.pr.d1||0,+S.pr.d2||0);
+ $('#out').innerHTML=h;$('#cnt').textContent=`共 ${ms.length*ps.length} 張（${ps.length} 人 × ${ms.length} 個月）`;
+ $('#who').innerHTML=ps.length?`<b>本次列印：</b>${ms.map(([y,m])=>`${y-1911}年${m}月`).join('、')}<br>`+ps.map(p=>`<span style="display:inline-block;border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:2px 4px 2px 0">${esc(p.no)} ${esc(p.name)}（${esc(p.dept)} ${esc(p.title)}）</span>`).join(''):'<b>⚠️ 尚未勾選任何人員</b>，請到「人員」分頁勾選要列印的人。';
+}
+
+function renderPeople(){
+ let h='<tr><th>列印</th><th>員工編號</th><th>姓名</th><th>部門</th><th>職位</th><th></th></tr>';
+ S.people.forEach((p,i)=>{h+=`<tr><td><input type="checkbox" data-i="${i}" data-f="on" ${p.on?'checked':''} style="width:auto;min-width:0"></td>`+
+  ['no','name','dept','title'].map(f=>`<td><input data-i="${i}" data-f="${f}" value="${esc(p[f])}"></td>`).join('')+
+  `<td><button class="g" data-del="${i}">刪除</button></td></tr>`});
+ $('#ptab').innerHTML=h;
+ $('#lp').innerHTML=S.people.map(p=>`<option value="${esc(p.no)}">${esc(p.no)} ${esc(p.name)}</option>`).join('');
+}
+function renderLeaves(){
+ const L=[...S.leaves].sort((a,b)=>a.from<b.from?-1:1);
+ let h='<tr><th>人員</th><th>日期</th><th>時間</th><th>假別</th><th></th></tr>';
+ for(const l of L){const p=S.people.find(x=>x.no===l.pid);
+  h+=`<tr><td>${esc(l.pid)} ${esc(p?p.name:'(已刪除)')}</td><td>${l.from}${l.to&&l.to!==l.from?' ～ '+l.to:''}</td><td>${l.st&&l.en?l.st+'-'+l.en:'整天'}</td><td>${esc(l.type)}</td><td><button class="g" data-ld="${l.id}">刪除</button></td></tr>`}
+ $('#ltab').innerHTML=L.length?h:'<tr><td class="mut">尚無請假紀錄</td></tr>';
+}
+function renderAll(){renderPeople();renderLeaves();renderOut();save()}
+
+$('#ptab').addEventListener('change',e=>{const t=e.target,i=t.dataset.i;if(i==null)return;
+ S.people[i][t.dataset.f]=t.dataset.f==='on'?t.checked:t.value.trim();if(t.dataset.f==='no'){const old=t.defaultValue}renderAll()});
+$('#ptab').addEventListener('click',e=>{const i=e.target.dataset.del;if(i==null)return;S.people.splice(i,1);renderAll()});
+$('#addP').onclick=()=>{S.people.push({no:'',name:'',dept:'',title:'',on:true});renderAll()};
+$('#allOn').onclick=()=>{S.people.forEach(p=>p.on=true);renderAll()};
+$('#allOff').onclick=()=>{S.people.forEach(p=>p.on=false);renderAll()};
+$('#doImp').onclick=()=>{let n=0;for(const ln of $('#imp').value.split('\n')){const f=ln.split(/\t|,|，/).map(s=>s.trim());if(!f[0]||!f[1])continue;
+ const o={no:f[0],name:f[1],dept:f[2]||'',title:f[3]||'',on:true},i=S.people.findIndex(p=>p.no===o.no);i>=0?S.people[i]=o:S.people.push(o);n++}
+ $('#imp').value='';renderAll();alert(`已匯入 ${n} 人`)};
+$('#exp').onclick=()=>{$('#bak').value=JSON.stringify(S)};
+$('#rest').onclick=()=>{try{const o=JSON.parse($('#bak').value);if(!Array.isArray(o.people))throw 0;S=Object.assign(S,o);init();alert('已還原')}catch(e){alert('備份文字格式不正確')}};
+
+$('#addL').onclick=()=>{const pid=$('#lp').value,from=$('#lf').value;if(!pid||!from){alert('請選擇人員與日期');return}
+ const st=$('#ls').value,en=$('#le').value;if((st&&!en)||(!st&&en)){alert('時間請兩欄都填，或都留空');return}
+ S.leaves.push({id:Date.now()+''+Math.random(),pid,from,to:$('#lto').value||from,st,en,type:$('#lt').value});
+ $('#lf').value=$('#lto').value=$('#ls').value=$('#le').value='';renderAll()};
+$('#ltab').addEventListener('click',e=>{const id=e.target.dataset.ld;if(!id)return;S.leaves=S.leaves.filter(l=>l.id!==id);renderAll()});
+
+for(const f of ['title','s1','s2','e1','e2'])$('#c-'+f).onchange=e=>{S.cfg[f]=e.target.value||S.cfg[f];renderAll()};
+$('#reroll').onclick=()=>{S.cfg.salt++;renderAll()};
+$('#hol').onchange=e=>{S.hol=e.target.value;renderAll()};
+$('#wk').onchange=e=>{S.work=e.target.value;renderAll()};
+for(const f of ['m1','m2','d1','d2'])$('#'+f).onchange=e=>{S.pr[f]=e.target.value;renderAll()};
+$('#prt').onclick=()=>{renderOut();window.print()};
+
+const TABS=[['people','人員'],['leave','請假'],['set','設定與假日'],['print','列印']];
+function tab(k){document.querySelectorAll('.pane').forEach(e=>e.classList.toggle('on',e.id==='p-'+k));
+ document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
+$('#tabs').innerHTML=TABS.map(([k,n])=>`<button data-k="${k}">${n}</button>`).join('');
+$('#tabs').onclick=e=>{if(e.target.dataset.k)tab(e.target.dataset.k)};
+function init(){
+ const c=S.cfg;$('#c-title').value=c.title;for(const f of['s1','s2','e1','e2'])$('#c-'+f).value=c[f];
+ $('#hol').value=S.hol;$('#wk').value=S.work;
+ if(!S.pr.m1){const n=new Date();S.pr.m1=S.pr.m2=n.getFullYear()+'-'+pad(n.getMonth()+1)}
+ for(const f of['m1','m2','d1','d2'])$('#'+f).value=S.pr[f]||'';
+ renderAll();
+}
+init();tab(S.people.length?'print':'people');
+</script>
+<script type="module">
+import {firebaseConfig} from './firebase-config.js';
+const ok=firebaseConfig&&firebaseConfig.apiKey&&!/YOUR_/.test(firebaseConfig.apiKey);
+if(ok){try{
+ const B='https://www.gstatic.com/firebasejs/10.12.2/';
+ const {initializeApp}=await import(B+'firebase-app.js');
+ const {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut}=await import(B+'firebase-auth.js');
+ const {getFirestore,doc,getDoc,setDoc}=await import(B+'firebase-firestore.js');
+ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),ref=doc(db,'attendance','main');
+ const bar=document.getElementById('cloudbar'),st=document.getElementById('cstat'),bi=document.getElementById('cin'),bo=document.getElementById('cout');
+ const OFF='未登入（資料只存在此瀏覽器）';
+ bar.style.display='flex';st.textContent=OFF;
+ let user=null,timer=null;
+ window.cloudPush=json=>{if(!user)return;clearTimeout(timer);st.textContent='同步中…';
+  timer=setTimeout(async()=>{try{await setDoc(ref,{json,updatedAt:Date.now(),by:user.email});st.textContent='已同步 ✓ '+user.email}catch(e){st.textContent='同步失敗：'+(e.code||e.message)}},800)};
+ bi.onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(e=>{st.textContent='登入失敗：'+(e.code||e.message)});
+ bo.onclick=()=>signOut(auth);
+ onAuthStateChanged(auth,async u=>{
+  user=u;bi.style.display=u?'none':'';bo.style.display=u?'':'none';
+  if(!u){st.textContent=OFF;return}
+  st.textContent='讀取雲端資料…';
+  try{const sn=await getDoc(ref);
+   if(sn.exists()){window.appLoad(JSON.parse(sn.data().json));st.textContent='已載入雲端資料 ✓ '+u.email}
+   else{window.cloudPush(window.appGet());st.textContent='已建立雲端資料 ✓'}
+  }catch(e){st.textContent='讀取失敗：'+(e.code||e.message)+'（請檢查 Firestore 規則與允許名單）'}
+ });
+}catch(e){console.error(e)}}
+</script>
+</body></html>
