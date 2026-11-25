@@ -99,6 +99,7 @@ table.l input{width:100%;min-width:70px}
   <div class="row">年月 <input type="month" id="m1"> 至 <input type="month" id="m2"></div>
   <div class="row">日期（選填）第 <input type="number" id="d1" min="1" max="31" style="width:60px"> 日 至 第 <input type="number" id="d2" min="1" max="31" style="width:60px"> 日 <span class="mut">空白＝整個月</span></div>
   <div class="row"><button class="b" id="prt">🖨️ 列印 / 存成 PDF</button><span class="mut" id="cnt"></span></div>
+  <div class="row"><button class="g" id="pend">只選「尚未簽到這個月」的人</button><button class="g" id="mark">✅ 印完了：把所選人員標記為「已簽至」迄月</button></div>
   <div id="who" style="margin:8px 0;line-height:1.9"></div>
   <div class="mut">每人每月一頁，順序為月份 → 人員。實際版面在本頁最下方預覽，每張表右上方都有姓名與員編。印表時在列印視窗取消「頁首頁尾」會更乾淨。</div>
  </div>
@@ -161,14 +162,14 @@ function renderOut(){
  const ps=S.people.filter(p=>p.on),ms=months();let h='';
  for(const[y,m]of ms)for(const p of ps)h+=sheet(p,y,m,+S.pr.d1||0,+S.pr.d2||0);
  $('#out').innerHTML=h;$('#cnt').textContent=`共 ${ms.length*ps.length} 張（${ps.length} 人 × ${ms.length} 個月）`;
- $('#who').innerHTML=ps.length?`<b>本次列印：</b>${ms.map(([y,m])=>`${y-1911}年${m}月`).join('、')}<br>`+ps.map(p=>`<span style="display:inline-block;border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:2px 4px 2px 0">${esc(p.no)} ${esc(p.name)}（${esc(p.dept)} ${esc(p.title)}）</span>`).join(''):'<b>⚠️ 尚未勾選任何人員</b>，請到「人員」分頁勾選要列印的人。';
+ $('#who').innerHTML=ps.length?`<b>本次列印：</b>${ms.map(([y,m])=>`${y-1911}年${m}月`).join('、')}<br>`+ps.map(p=>`<span style="display:inline-block;border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:2px 4px 2px 0">${esc(p.no)} ${esc(p.name)}（${esc(p.dept)} ${esc(p.title)}）${p.signed?` <span class="mut">已簽至${+p.signed.slice(0,4)-1911}年${+p.signed.slice(5)}月</span>`:' <span class="mut">尚無簽到紀錄</span>'}</span>`).join(''):'<b>⚠️ 尚未勾選任何人員</b>，請到「人員」分頁勾選要列印的人。';
 }
 
 function renderPeople(){
- let h='<tr><th>列印</th><th>員工編號</th><th>姓名</th><th>部門</th><th>職位</th><th></th></tr>';
+ let h='<tr><th>列印</th><th>員工編號</th><th>姓名</th><th>部門</th><th>職位</th><th>已簽至（月）</th><th></th></tr>';
  S.people.forEach((p,i)=>{h+=`<tr><td><input type="checkbox" data-i="${i}" data-f="on" ${p.on?'checked':''} style="width:auto;min-width:0"></td>`+
   ['no','name','dept','title'].map(f=>`<td><input data-i="${i}" data-f="${f}" value="${esc(p[f])}"></td>`).join('')+
-  `<td><button class="g" data-del="${i}">刪除</button></td></tr>`});
+  `<td><input type="month" data-i="${i}" data-f="signed" value="${esc(p.signed||'')}"></td><td><button class="g" data-del="${i}">刪除</button></td></tr>`});
  $('#ptab').innerHTML=h;
  $('#lp').innerHTML=S.people.map(p=>`<option value="${esc(p.no)}">${esc(p.no)} ${esc(p.name)}</option>`).join('');
 }
@@ -188,7 +189,7 @@ $('#addP').onclick=()=>{S.people.push({no:'',name:'',dept:'',title:'',on:true});
 $('#allOn').onclick=()=>{S.people.forEach(p=>p.on=true);renderAll()};
 $('#allOff').onclick=()=>{S.people.forEach(p=>p.on=false);renderAll()};
 $('#doImp').onclick=()=>{let n=0;for(const ln of $('#imp').value.split('\n')){const f=ln.split(/\t|,|，/).map(s=>s.trim());if(!f[0]||!f[1])continue;
- const o={no:f[0],name:f[1],dept:f[2]||'',title:f[3]||'',on:true},i=S.people.findIndex(p=>p.no===o.no);i>=0?S.people[i]=o:S.people.push(o);n++}
+ const o={no:f[0],name:f[1],dept:f[2]||'',title:f[3]||'',on:true},i=S.people.findIndex(p=>p.no===o.no);i>=0?S.people[i]=Object.assign({},S.people[i],o):S.people.push(o);n++}
  $('#imp').value='';renderAll();alert(`已匯入 ${n} 人`)};
 $('#exp').onclick=()=>{$('#bak').value=JSON.stringify(S)};
 $('#rest').onclick=()=>{try{const o=JSON.parse($('#bak').value);if(!Array.isArray(o.people))throw 0;S=Object.assign(S,o);init();alert('已還原')}catch(e){alert('備份文字格式不正確')}};
@@ -205,6 +206,8 @@ $('#hol').onchange=e=>{S.hol=e.target.value;renderAll()};
 $('#wk').onchange=e=>{S.work=e.target.value;renderAll()};
 for(const f of ['m1','m2','d1','d2'])$('#'+f).onchange=e=>{S.pr[f]=e.target.value;renderAll()};
 $('#prt').onclick=()=>{renderOut();window.print()};
+$('#pend').onclick=()=>{const m=S.pr.m1;S.people.forEach(p=>p.on=!p.signed||p.signed<m);renderAll()};
+$('#mark').onclick=()=>{const m=S.pr.m2||S.pr.m1,ps=S.people.filter(p=>p.on);if(!m||!ps.length){alert('請先選擇年月與人員');return}if(!confirm(`將 ${ps.length} 人標記為已簽至 ${m}？`))return;ps.forEach(p=>p.signed=m);renderAll()};
 
 const TABS=[['people','人員'],['leave','請假'],['set','設定與假日'],['print','列印']];
 function tab(k){document.querySelectorAll('.pane').forEach(e=>e.classList.toggle('on',e.id==='p-'+k));
