@@ -51,6 +51,7 @@ table.l input{width:100%;min-width:70px}
 <div class="ui">
 <h1>🗓️ 簽到表產生器</h1>
 <div class="row" id="cloudbar" style="display:none"><span id="cstat" class="mut"></span><button class="g" id="cin">Google 登入雲端同步</button><button class="g" id="cout" style="display:none">登出</button></div>
+<div class="card" id="remind"></div>
 <div class="tabs" id="tabs"></div>
 
 <div class="pane" id="p-people">
@@ -165,6 +166,19 @@ function renderOut(){
  $('#who').innerHTML=ps.length?`<b>本次列印：</b>${ms.map(([y,m])=>`${y-1911}年${m}月`).join('、')}<br>`+ps.map(p=>`<span style="display:inline-block;border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:2px 4px 2px 0">${esc(p.no)} ${esc(p.name)}（${esc(p.dept)} ${esc(p.title)}）${p.signed?` <span class="mut">已簽至${+p.signed.slice(0,4)-1911}年${+p.signed.slice(5)}月</span>`:' <span class="mut">尚無簽到紀錄</span>'}</span>`).join(''):'<b>⚠️ 尚未勾選任何人員</b>，請到「人員」分頁勾選要列印的人。';
 }
 
+let remM=(()=>{const n=new Date();return n.getFullYear()+'-'+pad(n.getMonth()+1)})();
+function renderRemind(){
+ const lbl=`${+remM.slice(0,4)-1911}年${+remM.slice(5)}月`,ps=S.people.filter(p=>p.no),miss=ps.filter(p=>!p.signed||p.signed<remM);
+ let h=`<div class="row"><b>🔔 簽到提醒</b> 檢查月份 <input type="month" id="rmm" value="${remM}"></div>`;
+ if(!ps.length)h+='<div class="mut">尚無人員，請先到「人員」分頁新增。</div>';
+ else if(!miss.length)h+=`<div>✅ ${lbl}所有人（${ps.length} 人）都已簽到。</div>`;
+ else h+=`<div>⚠️ ${lbl}還有 <b>${miss.length}</b> 人尚未簽到：</div><div style="line-height:1.9">`+miss.map(p=>`<span style="display:inline-block;border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:2px 4px 2px 0">${esc(p.name||p.no)} <span class="mut">${p.signed?'已簽至'+(+p.signed.slice(0,4)-1911)+'年'+(+p.signed.slice(5))+'月':'無紀錄'}</span></span>`).join('')+`</div><div class="row"><button class="b" id="rgo">選取這些人並前往列印</button></div>`;
+ $('#remind').innerHTML=h;
+}
+$('#remind').addEventListener('change',e=>{if(e.target.id==='rmm'&&e.target.value){remM=e.target.value;renderRemind()}});
+$('#remind').addEventListener('click',e=>{if(e.target.id!=='rgo')return;
+ S.people.forEach(p=>p.on=!!p.no&&(!p.signed||p.signed<remM));S.pr.m1=S.pr.m2=remM;
+ $('#m1').value=$('#m2').value=remM;renderAll();tab('print')});
 function renderPeople(){
  let h='<tr><th>列印</th><th>員工編號</th><th>姓名</th><th>部門</th><th>職位</th><th>已簽至（月）</th><th></th></tr>';
  S.people.forEach((p,i)=>{h+=`<tr><td><input type="checkbox" data-i="${i}" data-f="on" ${p.on?'checked':''} style="width:auto;min-width:0"></td>`+
@@ -180,7 +194,7 @@ function renderLeaves(){
   h+=`<tr><td>${esc(l.pid)} ${esc(p?p.name:'(已刪除)')}</td><td>${l.from}${l.to&&l.to!==l.from?' ～ '+l.to:''}</td><td>${l.st&&l.en?l.st+'-'+l.en:'整天'}</td><td>${esc(l.type)}</td><td><button class="g" data-ld="${l.id}">刪除</button></td></tr>`}
  $('#ltab').innerHTML=L.length?h:'<tr><td class="mut">尚無請假紀錄</td></tr>';
 }
-function renderAll(){renderPeople();renderLeaves();renderOut();save()}
+function renderAll(){renderRemind();renderPeople();renderLeaves();renderOut();save()}
 
 $('#ptab').addEventListener('change',e=>{const t=e.target,i=t.dataset.i;if(i==null)return;
  S.people[i][t.dataset.f]=t.dataset.f==='on'?t.checked:t.value.trim();if(t.dataset.f==='no'){const old=t.defaultValue}renderAll()});
