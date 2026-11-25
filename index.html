@@ -72,13 +72,13 @@ table.l input{width:100%;min-width:70px}
 </div>
 
 <div class="pane" id="p-leave">
- <div class="card"><h2>新增請假</h2>
+ <div class="card"><h2 id="lh">新增請假</h2>
   <div class="row">人員 <select id="lp"></select>
    假別 <select id="lt"><option>特休</option><option>病假</option><option>事假</option><option>公假</option><option>天災假</option><option>補休</option><option>婚假</option><option>喪假</option><option>其他</option></select></div>
   <div class="row">日期 <input type="date" id="lf"> 至 <input type="date" id="lto"> <span class="mut">（單日可留空）</span></div>
   <div class="row">時間 <input type="time" id="ls"> 至 <input type="time" id="le"> <span class="mut">（兩者留空＝整天請假）</span></div>
   <div class="mut">規則：從上班前請到某時（如 08:30–10:30）→ 上班打卡約在 10:30 前 1–5 分鐘；請到下班（如 14:00–17:30）→ 下班打卡約在 14:00 後 1–5 分鐘；中間時段只在備註註明。多日請假一律視為整天。</div>
-  <div class="row"><button class="b" id="addL">加入</button></div>
+  <div class="row"><button class="b" id="addL">加入</button><button class="g" id="cancelL" style="display:none">取消編輯</button></div>
  </div>
  <div class="card"><h2>請假紀錄</h2><div class="sc"><table class="l" id="ltab"></table></div></div>
 </div>
@@ -137,7 +137,7 @@ function day(p,y,m,d){
  const L=S.leaves.find(l=>l.pid===p.no&&k>=l.from&&k<=(l.to||l.from));
  if(L){
   const a=tm(L.st),b=tm(L.en),single=(L.to||L.from)===L.from;
-  if(a==null||b==null||!single){o.up=o.dn=L.type;return o}
+  if(a==null||b==null||!single||(a<=s2&&b>=e1)){o.up=o.dn=L.type;return o}
   if(a<=s2){up=Math.max(b-ri(r,1,5),a);o.note=`請${L.type}至${L.en}`}
   else if(b>=e1){dn=Math.min(a+ri(r,1,5),b);o.note=`請${L.type} ${L.st}起`}
   else o.note=`${L.type} ${L.st}-${L.en}`;
@@ -191,7 +191,7 @@ function renderLeaves(){
  const L=[...S.leaves].sort((a,b)=>a.from<b.from?-1:1);
  let h='<tr><th>人員</th><th>日期</th><th>時間</th><th>假別</th><th></th></tr>';
  for(const l of L){const p=S.people.find(x=>x.no===l.pid);
-  h+=`<tr><td>${esc(l.pid)} ${esc(p?p.name:'(已刪除)')}</td><td>${l.from}${l.to&&l.to!==l.from?' ～ '+l.to:''}</td><td>${l.st&&l.en?l.st+'-'+l.en:'整天'}</td><td>${esc(l.type)}</td><td><button class="g" data-ld="${l.id}">刪除</button></td></tr>`}
+  h+=`<tr><td>${esc(l.pid)} ${esc(p?p.name:'(已刪除)')}</td><td>${l.from}${l.to&&l.to!==l.from?' ～ '+l.to:''}</td><td>${l.st&&l.en?l.st+'-'+l.en:'整天'}</td><td>${esc(l.type)}</td><td><button class="g" data-le="${l.id}">編輯</button> <button class="g" data-ld="${l.id}">刪除</button></td></tr>`}
  $('#ltab').innerHTML=L.length?h:'<tr><td class="mut">尚無請假紀錄</td></tr>';
 }
 function renderAll(){renderRemind();renderPeople();renderLeaves();renderOut();save()}
@@ -208,11 +208,22 @@ $('#doImp').onclick=()=>{let n=0;for(const ln of $('#imp').value.split('\n')){co
 $('#exp').onclick=()=>{$('#bak').value=JSON.stringify(S)};
 $('#rest').onclick=()=>{try{const o=JSON.parse($('#bak').value);if(!Array.isArray(o.people))throw 0;S=Object.assign(S,o);init();alert('已還原')}catch(e){alert('備份文字格式不正確')}};
 
+let editId=null;
+function clearL(){editId=null;$('#lf').value=$('#lto').value=$('#ls').value=$('#le').value='';$('#addL').textContent='加入';$('#cancelL').style.display='none';$('#lh').textContent='新增請假'}
 $('#addL').onclick=()=>{const pid=$('#lp').value,from=$('#lf').value;if(!pid||!from){alert('請選擇人員與日期');return}
  const st=$('#ls').value,en=$('#le').value;if((st&&!en)||(!st&&en)){alert('時間請兩欄都填，或都留空');return}
- S.leaves.push({id:Date.now()+''+Math.random(),pid,from,to:$('#lto').value||from,st,en,type:$('#lt').value});
- $('#lf').value=$('#lto').value=$('#ls').value=$('#le').value='';renderAll()};
-$('#ltab').addEventListener('click',e=>{const id=e.target.dataset.ld;if(!id)return;S.leaves=S.leaves.filter(l=>l.id!==id);renderAll()});
+ const to=$('#lto').value||from;if(to<from){alert('結束日期不能早於開始日期');return}
+ const rec={pid,from,to,st,en,type:$('#lt').value};
+ if(editId){const l=S.leaves.find(x=>x.id===editId);if(l)Object.assign(l,rec)}else S.leaves.push(Object.assign({id:Date.now()+''+Math.random()},rec));
+ clearL();renderAll()};
+$('#cancelL').onclick=clearL;
+$('#ltab').addEventListener('click',e=>{const eid=e.target.dataset.le;
+ if(eid){const l=S.leaves.find(x=>x.id===eid);if(!l)return;
+  if(![...$('#lt').options].some(o=>o.value===l.type))$('#lt').add(new Option(l.type,l.type));
+  if(![...$('#lp').options].some(o=>o.value===l.pid))$('#lp').add(new Option(l.pid,l.pid));
+  $('#lp').value=l.pid;$('#lt').value=l.type;$('#lf').value=l.from;$('#lto').value=l.to&&l.to!==l.from?l.to:'';$('#ls').value=l.st||'';$('#le').value=l.en||'';
+  editId=eid;$('#addL').textContent='儲存修改';$('#cancelL').style.display='';$('#lh').textContent='✏️ 編輯請假';$('#lh').scrollIntoView({behavior:'smooth',block:'center'});return}
+ const id=e.target.dataset.ld;if(!id)return;S.leaves=S.leaves.filter(l=>l.id!==id);renderAll()});
 
 for(const f of ['title','s1','s2','e1','e2'])$('#c-'+f).onchange=e=>{S.cfg[f]=e.target.value||S.cfg[f];renderAll()};
 $('#reroll').onclick=()=>{S.cfg.salt++;renderAll()};
